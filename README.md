@@ -1,25 +1,48 @@
 # Relay
 
-Relay is a macOS desktop app concept for coordinating locally installed Claude Desktop and ChatGPT/Codex through their visible interfaces and macOS Accessibility. It does not use OpenAI or Anthropic API tokens.
+Relay is a small Terminal chat where you can talk with Codex and Claude together. Their replies use different colours so they are easy to tell apart.
 
-## Current starter
+## What you need
 
-The SwiftUI prototype follows the supplied references: a shared conversation, distinct user/Codex/Claude message styles, a composer, assistant selection, status footer, and Options for background mode, auto-approval, and full control. It currently provides the interface and local preference storage; assistant discovery and message dispatch are not implemented yet.
+- A Mac with Python 3.
+- The Codex command-line tool, signed in with your ChatGPT account.
+- Claude Code, signed in with your Claude account, to use both assistants. Relay can still run with Codex on its own.
 
-## Build on a Mac
+Relay uses the sign-ins saved by those tools. It removes API-key variables when starting them, so it does not use OpenAI or Anthropic API keys. The assistants still connect to their online services, and their normal account limits apply.
 
-Requires macOS 14 or later and Swift 6. From the repository folder, run: swift run.
+## Download and start Relay
 
-## Local automation plan
+Open Terminal and enter:
 
-The automation adapter must run on the Mac where the assistant apps are installed. It should use the macOS Accessibility API to inspect and operate app controls without activating their windows. Background mode must fail closed if an interaction would steal focus, and it must never synthesize keystrokes into whichever app the user is currently using. The operator will need to grant Relay Accessibility permission in System Settings and keep the target apps running.
+```sh
+git clone https://github.com/Turbulentmonk/relay.git
+cd relay
+python3 relay.py
+```
 
-No API credentials are required. Assistant sign-in and each app's own tool-approval settings remain managed by those apps.
+The repository needs to be public for everyone to clone it. If it is still private, ask the owner for access or download the files while signed in to GitHub.
 
-## Safety and control modes
+## Choose how the assistants work
 
-The prototype stores background, auto-approval, and full-control preferences locally. These controls are only UI preferences today; they do not yet change assistant permissions or automate approvals. A complete implementation should make the effective permission level visible, default to confirmation for consequential actions, and require an explicit opt-in before enabling each app's full-control mode.
+When both are selected, one assistant leads, the other adds a useful contribution, and the lead gives a short conclusion. Choose the lead by typing:
 
-## Cloud-buildable and Mac-local work
+- `/lead claude` — Claude answers first and Codex adds a contribution
+- `/lead codex` — Codex answers first and Claude adds a contribution
 
-The UI, conversation model, settings, docs, and packaging can be developed in source control. App discovery, Accessibility permissions, background behavior, and compatibility with installed versions of Claude Desktop and ChatGPT/Codex must be implemented and verified on a physical Mac with those apps installed and signed in.
+Other commands:
+
+- `/mode codex` — use Codex only
+- `/mode claude` — use Claude only
+- `/mode both` — use both assistants
+- `/new` — start a fresh conversation
+- `/quit` — close Relay
+
+If an assistant reports that it has hit a usage or rate limit, Relay tells you which assistant could not respond and suggests trying again after the limit resets.
+
+Relay asks assistants not to change files. Codex runs in read-only mode and Claude uses plan mode. It does not turn on automatic approval or full control.
+
+## If an assistant is missing
+
+Relay shows whether it can find each command-line tool. Codex is included in the ChatGPT app on some Macs. Claude Code must be installed separately. See the [Claude Code setup guide](https://docs.anthropic.com/en/docs/claude-code/getting-started).
+
+The earlier SwiftUI screen mock-up is in `Sources/Relay/RelayApp.swift`. Running the Terminal version does not require Swift or Xcode.
