@@ -34,7 +34,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 
 If an assistant reports that it has hit a usage or rate limit, Relay tells you which one could not respond and suggests trying again after the limit resets.
 
-Relay asks the assistants to answer without changing files. Codex runs in read-only mode and Claude uses plan mode. It does not turn on automatic approval or full control.
+Codex starts in read-only mode. To let it read and edit files in the folder where Relay was started, type `/access workspace-write`. Type `/access read-only` to switch back. Start Relay from the project folder you want Codex to work in. Claude uses plan mode. Relay does not turn on full computer access.
 
 ## If an assistant is missing
 
