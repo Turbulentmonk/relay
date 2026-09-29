@@ -54,11 +54,11 @@ def render(speaker: str, text: str) -> None:
     wrap_print(text)
 
 
-def run_codex(prompt: str) -> str:
+def run_codex(prompt: str, access: str) -> str:
     binary = codex_command()
     if not binary:
         raise RuntimeError("Codex CLI was not found. Open ChatGPT once or set RELAY_CODEX_BIN.")
-    command = [binary, "exec", "--ephemeral", "--json", "--sandbox", "read-only", prompt]
+    command = [binary, "exec", "--ephemeral", "--json", "--sandbox", access, prompt]
     return run_jsonl_agent("Codex", command)
 
 
@@ -132,15 +132,22 @@ def conversation_context(turns: list[Turn]) -> str:
     )
 
 
-def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str) -> list[Turn]:
+def codex_file_scope(access: str) -> str:
+    if access == "workspace-write":
+        return "You may read and edit files in the current working folder. Do not modify files outside that folder."
+    return "You may read files but must not edit them or run commands."
+
+
+def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: str) -> list[Turn]:
     context = conversation_context(turns)
+    file_scope = codex_file_scope(access)
     first_prompt = (
         f"You are {leader} participating in Relay, a conversation with the user and another assistant. "
-        "Answer the user's request clearly and concisely. Do not edit files or run commands.\n\n"
+        f"Answer the user's request clearly and concisely. {file_scope}\n\n"
         f"User: {user_text}{context}"
     )
     if mode == "codex":
-        answer = run_codex(first_prompt)
+        answer = run_codex(first_prompt, access)
         render("Codex", answer)
         return [Turn("You", user_text), Turn("Codex", answer)]
 
@@ -154,21 +161,21 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str) -> list[
         return [Turn("You", user_text), Turn("Claude", answer)]
 
     other = "Claude" if leader == "Codex" else "Codex"
-    lead_answer = run_codex(first_prompt) if leader == "Codex" else run_claude(first_prompt)
+    lead_answer = run_codex(first_prompt, access) if leader == "Codex" else run_claude(first_prompt)
     render(leader, lead_answer)
     add_prompt = (
         f"You are {other} in a group conversation. Add one useful perspective or a concrete "
-        f"improvement to {leader}'s answer. Keep it concise. Do not edit files or run commands.\n\n"
+        f"improvement to {leader}'s answer. Keep it concise. {file_scope}\n\n"
         f"User request: {user_text}\n\n{leader}: {lead_answer}{context}"
     )
-    add_answer = run_claude(add_prompt) if other == "Claude" else run_codex(add_prompt)
+    add_answer = run_claude(add_prompt) if other == "Claude" else run_codex(add_prompt, access)
     render(other, add_answer)
     final_prompt = (
         f"You are {leader}, concluding a group conversation. Give one concise, practical final "
-        f"answer that uses {other}'s contribution where useful. Do not edit files or run commands.\n\n"
+        f"answer that uses {other}'s contribution where useful. {file_scope}\n\n"
         f"User request: {user_text}\n\n{leader}'s first answer: {lead_answer}\n\n{other}: {add_answer}{context}"
     )
-    final = run_codex(final_prompt) if leader == "Codex" else run_claude(final_prompt)
+    final = run_codex(final_prompt, access) if leader == "Codex" else run_claude(final_prompt)
     render(f"{leader} - conclusion", final)
     return [Turn("You", user_text), Turn(leader, lead_answer), Turn(other, add_answer), Turn(leader, final)]
 
@@ -179,7 +186,9 @@ def main() -> int:
     print(f"{WHITE}Relay{RESET} {DIM}- terminal conversation - no provider API keys{RESET}")
     print(f"Codex: {TEAL}{'ready' if codex_ready else 'not found'}{RESET}  "
           f"Claude Code: {ORANGE}{'ready' if claude_ready else 'not installed'}{RESET}")
-    print(f"{DIM}Read-only prompts by default. Type /mode codex, /mode claude, /mode both, /lead codex, /lead claude, /new, or /quit.{RESET}")
+    access = "read-only"
+    print(f"Codex file access: {access}")
+    print(f"{DIM}Type /mode codex, /mode claude, /mode both, /lead codex, /lead claude, /access read-only, /access workspace-write, /new, or /quit.{RESET}")
     mode = "both" if codex_ready and claude_ready else ("codex" if codex_ready else "both")
     leader = "Codex"
     turns: list[Turn] = []
@@ -213,8 +222,18 @@ def main() -> int:
             else:
                 print(f"{RED}Choose codex or claude.{RESET}")
             continue
+        if user_text.startswith("/access "):
+            requested = user_text.split(maxsplit=1)[1].lower()
+            if requested in {"read-only", "workspace-write"}:
+                access = requested
+                print(f"Codex file access: {access}")
+                if access == "workspace-write":
+                    print(f"{DIM}Codex can now change files in the folder where Relay was started.{RESET}")
+            else:
+                print(f"{RED}Choose read-only or workspace-write.{RESET}")
+            continue
         try:
-            turns.extend(ask_turn(user_text, turns, mode, leader))
+            turns.extend(ask_turn(user_text, turns, mode, leader, access))
         except KeyboardInterrupt:
             print(f"\n{DIM}Stopped the current turn.{RESET}")
         except AgentError as error:
