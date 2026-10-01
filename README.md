@@ -4,7 +4,7 @@ Relay is a small Terminal chat where you can talk with Codex and Claude together
 
 ## What you need
 
-- A Mac with Python 3.
+- A Mac with Python 3.10 or newer.
 - The Codex command-line tool, signed in with your ChatGPT account.
 - Claude Code, signed in with your Claude account, to use both assistants. Relay can still run with Codex on its own.
 

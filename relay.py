@@ -189,8 +189,18 @@ def main() -> int:
     access = "read-only"
     print(f"Codex file access: {access}")
     print(f"{DIM}Type /mode codex, /mode claude, /mode both, /lead codex, /lead claude, /access read-only, /access workspace-write, /new, or /quit.{RESET}")
-    mode = "both" if codex_ready and claude_ready else ("codex" if codex_ready else "both")
-    leader = "Codex"
+    if codex_ready and claude_ready:
+        mode = "both"
+        leader = "Codex"
+    elif codex_ready:
+        mode = "codex"
+        leader = "Codex"
+    elif claude_ready:
+        mode = "claude"
+        leader = "Claude"
+    else:
+        mode = "both"
+        leader = "Codex"
     turns: list[Turn] = []
     while True:
         try:
