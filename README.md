@@ -5,8 +5,7 @@ Relay is a small Terminal chat where you can talk with Codex and Claude together
 ## What you need
 
 - A Mac with Python 3.10 or newer.
-- The Codex command-line tool, signed in with your ChatGPT account.
-- Claude Code, signed in with your Claude account, to use both assistants. Relay can still run with Codex on its own.
+- At least one of the Codex command-line tool or Claude Code, signed in with its associated account. Install both to use both assistants; Relay starts with whichever provider or providers it finds.
 
 Relay uses the sign-ins saved by those tools. It removes API-key variables when starting them, so it does not use OpenAI or Anthropic API keys. The assistants still connect to their own online services, and their normal account limits apply.
 
@@ -43,3 +42,5 @@ Relay shows whether it can find each command-line tool. Codex is included in the
 ## Earlier screen mock-up
 
 `Sources/Relay/RelayApp.swift` is the first SwiftUI screen mock-up based on the supplied images. Running the Terminal version does not require Swift or Xcode.
+
+For the current roadmap and repository-level concerns, see [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
