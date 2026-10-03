@@ -2,6 +2,15 @@
 
 Relay is a small Terminal chat where you can talk with Codex and Claude together. Their replies use different colours so they are easy to tell apart.
 
+## What Relay does
+
+- Runs the locally installed Codex CLI, Claude Code, or both using their existing sign-ins; Relay removes supported API-key environment variables when launching them.
+- In two-assistant mode, one assistant leads, the other contributes, and the lead gives a short conclusion. Choose the lead with `/lead codex` or `/lead claude`.
+- Lets you switch providers with `/mode codex`, `/mode claude`, or `/mode both`, and start a fresh in-memory conversation with `/new`.
+- Starts Codex with read-only access. `/access workspace-write` opts into letting Codex edit files in the directory where Relay was started. Claude runs in plan mode.
+
+Relay is the Python terminal app. `Sources/Relay/RelayApp.swift` is an earlier SwiftUI mock-up and does not connect to the assistants.
+
 ## What you need
 
 - A Mac with Python 3.10 or newer.
@@ -39,8 +48,6 @@ Codex starts in read-only mode. To let it read and edit files in the folder wher
 
 Relay shows whether it can find each command-line tool. Codex is included in the ChatGPT app on some Macs. Claude Code must be installed separately. See the [Claude Code setup guide](https://docs.anthropic.com/en/docs/claude-code/getting-started).
 
-## Earlier screen mock-up
+## Current limitations and project notes
 
-`Sources/Relay/RelayApp.swift` is the first SwiftUI screen mock-up based on the supplied images. Running the Terminal version does not require Swift or Xcode.
-
-For the current roadmap and repository-level concerns, see [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
+Conversation history stays in memory and is not saved across restarts. Relay currently has no automated test suite or CI workflow. Its terminal output and child-process cancellation are listed for follow-up in [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
