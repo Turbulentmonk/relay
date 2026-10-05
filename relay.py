@@ -191,7 +191,7 @@ def main() -> int:
           f"Claude Code: {ORANGE}{'ready' if claude_ready else 'not installed'}{RESET}")
     access = "read-only"
     print(f"Codex file access: {access}")
-    print(f"{DIM}Type /mode codex, /mode claude, /mode both, /lead codex, /lead claude, /access read-only, /access workspace-write, /new, or /quit.{RESET}")
+    print(f"{DIM}Type /help for commands.{RESET}")
     if codex_ready and claude_ready:
         mode = "both"
         leader = "Codex"
@@ -212,6 +212,9 @@ def main() -> int:
             print("\nGoodbye.")
             return 0
         if not user_text:
+            continue
+        if user_text.lower() in {"/help", "/?"}:
+            print("/mode codex|claude|both · /lead codex|claude · /access read-only|workspace-write · /new · /clear · /status · /quit")
             continue
         if user_text == "/quit":
             return 0
