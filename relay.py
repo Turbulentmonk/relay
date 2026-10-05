@@ -229,7 +229,10 @@ def main() -> int:
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"codex", "claude", "both"}:
                 mode = requested
+                unavailable = ("Codex" if requested in {"codex", "both"} and not codex_ready else "Claude Code" if requested in {"claude", "both"} and not claude_ready else None)
                 print(f"{DIM}Mode: {mode}{RESET}")
+                if unavailable:
+                    print(f"{ORANGE}{unavailable} is not installed or could not be found; its turn will show setup guidance.{RESET}")
             else:
                 print(f"{RED}Choose codex, claude, or both.{RESET}")
             continue
