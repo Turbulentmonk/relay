@@ -172,14 +172,20 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
         f"improvement to {leader}'s answer. Keep it concise. {file_scope}\n\n"
         f"User request: {user_text}\n\n{leader}: {lead_answer}{context}"
     )
-    add_answer = run_claude(add_prompt) if other == "Claude" else run_codex(add_prompt, access)
+    try:
+        add_answer = run_claude(add_prompt) if other == "Claude" else run_codex(add_prompt, access)
+    except AgentError as error:
+        raise AgentError(f"{other} contribution failed after {leader} replied: {error}") from error
     render(other, add_answer)
     final_prompt = (
         f"You are {leader}, concluding a group conversation. Give one concise, practical final "
         f"answer that uses {other}'s contribution where useful. {file_scope}\n\n"
         f"User request: {user_text}\n\n{leader}'s first answer: {lead_answer}\n\n{other}: {add_answer}{context}"
     )
-    final = run_codex(final_prompt, access) if leader == "Codex" else run_claude(final_prompt)
+    try:
+        final = run_codex(final_prompt, access) if leader == "Codex" else run_claude(final_prompt)
+    except AgentError as error:
+        raise AgentError(f"{leader} could not write the final summary: {error}") from error
     render(f"{leader} - conclusion", final)
     return [Turn("You", user_text), Turn(leader, lead_answer), Turn(other, add_answer), Turn(leader, final)]
 
