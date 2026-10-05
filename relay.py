@@ -103,11 +103,11 @@ def run_json_agent(name: str, command: list[str]) -> str:
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
-        return result.stdout.strip()
+        return "\n".join(line.rstrip() for line in result.stdout.strip().splitlines())
     text = payload.get("result") or payload.get("message") or payload.get("text")
     if not text:
         raise AgentError(f"{name} returned a response Relay couldn't read. Try running its command-line tool directly.")
-    return str(text).strip()
+    return "\n".join(line.rstrip() for line in str(text).strip().splitlines())
 
 
 def agent_error_message(name: str, details: str, status: int) -> str:
