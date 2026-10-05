@@ -218,6 +218,9 @@ def main() -> int:
             continue
         if user_text == "/quit":
             return 0
+        if user_text.lower() == "/status":
+            print(f"Mode: {mode} · Lead: {leader} · Codex: {'ready' if codex_ready else 'not found'} · Claude Code: {'ready' if claude_ready else 'not found'} · Access: {access}")
+            continue
         if user_text == "/new":
             turns.clear()
             print(f"{DIM}Started a new conversation.{RESET}")
