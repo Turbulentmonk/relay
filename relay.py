@@ -206,6 +206,8 @@ def main() -> int:
     else:
         mode = "both"
         leader = "Codex"
+    if not codex_ready and not claude_ready:
+        print(f"{RED}Install Codex CLI or Claude Code, then restart Relay. See /help for commands.{RESET}")
     turns: list[Turn] = []
     while True:
         try:
