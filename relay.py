@@ -264,7 +264,7 @@ def main() -> int:
                 print(f"Codex file access: {access}")
     print(f"Starting mode: {'both' if codex_ready and claude_ready else 'codex' if codex_ready else 'claude' if claude_ready else 'none available'}")
                 if access == "workspace-write":
-                    print(f"{DIM}Codex can now change files in the folder where Relay was started.{RESET}")
+                    print(f"{ORANGE}Workspace-write enabled: Codex may change files under {os.getcwd()}.{RESET}")
             else:
                 print(f"{RED}Choose read-only or workspace-write.{RESET}")
             continue
