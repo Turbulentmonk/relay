@@ -238,6 +238,9 @@ def main() -> int:
             turns.clear()
             print(f"{DIM}Started a new conversation.{RESET}")
             continue
+        if user_text.lower() == "/mode":
+            print(f"Mode: {mode}")
+            continue
         if user_text.lower().startswith("/mode "):
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"codex", "claude", "both"}:
