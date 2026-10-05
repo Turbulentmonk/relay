@@ -254,6 +254,9 @@ def main() -> int:
             else:
                 print(f"{RED}Choose read-only or workspace-write.{RESET}")
             continue
+        if user_text.startswith("/"):
+            print(f"{RED}Unknown command. Type /help to see available commands.{RESET}")
+            continue
         try:
             turns.extend(ask_turn(user_text, turns, mode, leader, access))
         except KeyboardInterrupt:
