@@ -32,6 +32,9 @@ class AgentError(RuntimeError):
 
 
 def codex_command() -> str | None:
+    configured = os.environ.get("RELAY_CODEX_BIN")
+    if configured and os.path.isfile(os.path.expanduser(configured)):
+        return os.path.expanduser(configured)
     found = shutil.which("codex")
     if found:
         return found
