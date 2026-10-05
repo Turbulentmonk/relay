@@ -47,8 +47,6 @@ def wrap_print(text: str, color: str = WHITE) -> None:
     for paragraph in text.strip().splitlines():
         if paragraph.strip():
             print(color + textwrap.fill(paragraph, width=width) + RESET)
-        else:
-            print()
 
 
 def render(speaker: str, text: str) -> None:
