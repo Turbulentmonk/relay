@@ -89,7 +89,10 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
             final_messages.append(item["text"])
     if not final_messages:
         raise RuntimeError(f"{name} finished without returning a message.")
-    return final_messages[-1].strip()
+    response = final_messages[-1].strip()
+    if not response:
+        raise AgentError(f"{name} returned an empty reply. Try sending the request again.")
+    return response
 
 
 def run_json_agent(name: str, command: list[str]) -> str:
