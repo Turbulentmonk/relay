@@ -191,6 +191,7 @@ def main() -> int:
           f"Claude Code: {ORANGE}{'ready' if claude_ready else 'not installed'}{RESET}")
     access = "read-only"
     print(f"Codex file access: {access}")
+    print(f"Starting mode: {'both' if codex_ready and claude_ready else 'codex' if codex_ready else 'claude' if claude_ready else 'none available'}")
     print(f"{DIM}Type /help for commands.{RESET}")
     if codex_ready and claude_ready:
         mode = "both"
@@ -252,6 +253,7 @@ def main() -> int:
             if requested in {"read-only", "workspace-write"}:
                 access = requested
                 print(f"Codex file access: {access}")
+    print(f"Starting mode: {'both' if codex_ready and claude_ready else 'codex' if codex_ready else 'claude' if claude_ready else 'none available'}")
                 if access == "workspace-write":
                     print(f"{DIM}Codex can now change files in the folder where Relay was started.{RESET}")
             else:
