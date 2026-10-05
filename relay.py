@@ -216,7 +216,7 @@ def main() -> int:
         if user_text.lower() in {"/help", "/?"}:
             print("/mode codex|claude|both · /lead codex|claude · /access read-only|workspace-write · /new · /clear · /status · /quit")
             continue
-        if user_text == "/quit":
+        if user_text.lower() == "/quit":
             return 0
         if user_text.lower() == "/clear":
             print("\033[2J\033[H", end="", flush=True)
@@ -224,11 +224,11 @@ def main() -> int:
         if user_text.lower() == "/status":
             print(f"Mode: {mode} · Lead: {leader} · Codex: {'ready' if codex_ready else 'not found'} · Claude Code: {'ready' if claude_ready else 'not found'} · Access: {access}")
             continue
-        if user_text == "/new":
+        if user_text.lower() == "/new":
             turns.clear()
             print(f"{DIM}Started a new conversation.{RESET}")
             continue
-        if user_text.startswith("/mode "):
+        if user_text.lower().startswith("/mode "):
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"codex", "claude", "both"}:
                 mode = requested
@@ -239,7 +239,7 @@ def main() -> int:
             else:
                 print(f"{RED}Choose codex, claude, or both.{RESET}")
             continue
-        if user_text.startswith("/lead "):
+        if user_text.lower().startswith("/lead "):
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"codex", "claude"}:
                 leader = requested.capitalize()
@@ -247,7 +247,7 @@ def main() -> int:
             else:
                 print(f"{RED}Choose codex or claude.{RESET}")
             continue
-        if user_text.startswith("/access "):
+        if user_text.lower().startswith("/access "):
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"read-only", "workspace-write"}:
                 access = requested
