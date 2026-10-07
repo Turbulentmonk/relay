@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,8 @@ TEAL = "\033[38;5;116m"
 ORANGE = "\033[38;5;215m"
 RED = "\033[38;5;203m"
 WHITE = "\033[38;5;252m"
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 
 @dataclass
@@ -29,6 +32,10 @@ class Turn:
 
 class AgentError(RuntimeError):
     """A readable error from one of the local assistant tools."""
+
+
+def sanitize_terminal_text(text: str) -> str:
+    return CONTROL_CHARS.sub("", ANSI_ESCAPE.sub("", text))
 
 
 def codex_command() -> str | None:
@@ -43,6 +50,7 @@ def codex_command() -> str | None:
 
 
 def wrap_print(text: str, color: str = WHITE) -> None:
+    text = sanitize_terminal_text(text)
     width = max(40, shutil.get_terminal_size((80, 24)).columns - 4)
     for paragraph in text.strip().splitlines():
         if paragraph.strip():
@@ -278,9 +286,9 @@ def main() -> int:
         except KeyboardInterrupt:
             print(f"\n{DIM}Stopped the current turn.{RESET}")
         except AgentError as error:
-            print(f"{RED}Relay: {error}{RESET}", file=sys.stderr)
+            print(f"{RED}Relay: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
         except Exception as error:  # Show provider setup and CLI errors in the terminal.
-            print(f"{RED}Relay: {error}{RESET}", file=sys.stderr)
+            print(f"{RED}Relay: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
     
 
 if __name__ == "__main__":
