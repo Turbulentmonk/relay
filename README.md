@@ -38,6 +38,8 @@ Type a message and press Return. When both assistants are selected, Relay has on
 - `/mode claude` — use Claude only
 - `/mode both` — use both assistants
 - `/new` — start a fresh conversation
+- `/history` — list conversations saved on this device (up to 30 days)
+- `/delete-history` — permanently delete saved conversations
 - `/quit` — close Relay
 
 If an assistant reports that it has hit a usage or rate limit, Relay tells you which one could not respond and suggests trying again after the limit resets.
@@ -52,4 +54,4 @@ Relay shows whether it can find each command-line tool. Codex is included in the
 
 ## Current limitations and project notes
 
-Conversation history stays in memory and is not saved across restarts. Relay currently has no automated test suite or CI workflow. Its terminal output and child-process cancellation are listed for follow-up in [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
+Relay saves conversation transcripts locally under the user data directory, keeps them for up to 30 days, and provides `/history` and `/delete-history` controls. No transcript is sent to Relay servers. Relay currently has no automated test suite or CI workflow. Its terminal output and child-process cancellation are listed for follow-up in [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).

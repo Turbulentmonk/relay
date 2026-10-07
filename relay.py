@@ -10,7 +10,10 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import uuid
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from pathlib import Path
 
 
 RESET = "\033[0m"
@@ -22,6 +25,7 @@ RED = "\033[38;5;203m"
 WHITE = "\033[38;5;252m"
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300
 MAX_PROVIDER_TIMEOUT_SECONDS = 3600
+HISTORY_RETENTION_DAYS = 30
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
@@ -30,6 +34,52 @@ CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 class Turn:
     speaker: str
     text: str
+    created_at: str = ""
+
+
+def history_path() -> Path:
+    base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "relay" / "history.json"
+
+
+def load_history() -> list[dict]:
+    path = history_path()
+    try:
+        sessions = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(sessions, list):
+            return []
+    except (OSError, json.JSONDecodeError):
+        return []
+    cutoff = datetime.now(timezone.utc) - timedelta(days=HISTORY_RETENTION_DAYS)
+    retained = []
+    for session in sessions:
+        try:
+            created = datetime.fromisoformat(session["updated_at"])
+            if created >= cutoff and isinstance(session.get("turns"), list):
+                retained.append(session)
+        except (KeyError, TypeError, ValueError):
+            continue
+    return retained
+
+
+def save_history(turns: list[Turn], session_id: str) -> None:
+    sessions = load_history()
+    if turns:
+        snapshot = {
+            "id": session_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "turns": [
+                {"speaker": turn.speaker, "text": turn.text, "created_at": turn.created_at}
+                for turn in turns
+            ],
+        }
+        sessions = [session for session in sessions if session.get("id") != session_id]
+        sessions.append(snapshot)
+    path = history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(sessions, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
 
 
 class AgentError(RuntimeError):
@@ -237,6 +287,7 @@ def main() -> int:
     access = "read-only"
     print(f"Codex file access: {access}")
     print(f"Starting mode: {'both' if codex_ready and claude_ready else 'codex' if codex_ready else 'claude' if claude_ready else 'none available'}")
+    print(f"{DIM}Local conversation history is kept for {HISTORY_RETENTION_DAYS} days. Use /history or /delete-history.{RESET}")
     print(f"{DIM}Type /help for commands.{RESET}")
     if codex_ready and claude_ready:
         mode = "both"
@@ -253,18 +304,21 @@ def main() -> int:
     if not codex_ready and not claude_ready:
         print(f"{RED}Install Codex CLI or Claude Code, then restart Relay. See /help for commands.{RESET}")
     turns: list[Turn] = []
+    session_id = str(uuid.uuid4())
     while True:
         try:
             user_text = input(f"\n{BLUE}You > {RESET}").strip()
         except (EOFError, KeyboardInterrupt):
+            save_history(turns, session_id)
             print("\nGoodbye.")
             return 0
         if not user_text:
             continue
         if user_text.lower() in {"/help", "/?"}:
-            print("/mode codex|claude|both · /lead codex|claude · /access read-only|workspace-write · /new · /clear · /status · /quit")
+            print("/mode codex|claude|both · /lead codex|claude · /access read-only|workspace-write · /new · /history · /delete-history · /clear · /status · /quit")
             continue
         if user_text.lower() == "/quit":
+            save_history(turns, session_id)
             return 0
         if user_text.lower() == "/clear":
             print("\033[2J\033[H", end="", flush=True)
@@ -273,8 +327,32 @@ def main() -> int:
             print(f"Mode: {mode} · Lead: {leader} · Codex: {'ready' if codex_ready else 'not found'} · Claude Code: {'ready' if claude_ready else 'not found'} · Access: {access}")
             continue
         if user_text.lower() == "/new":
+            save_history(turns, session_id)
             turns.clear()
+            session_id = str(uuid.uuid4())
             print(f"{DIM}Started a new conversation.{RESET}")
+            continue
+        if user_text.lower() == "/history":
+            sessions = load_history()
+            print(f"{DIM}{len(sessions)} saved conversation(s), retained for up to {HISTORY_RETENTION_DAYS} days in {history_path()}.{RESET}")
+            for index, session in enumerate(sessions[-10:], start=max(1, len(sessions) - 9)):
+                try:
+                    updated = datetime.fromisoformat(session["updated_at"]).astimezone().strftime("%Y-%m-%d %H:%M")
+                except (KeyError, ValueError):
+                    updated = "unknown date"
+                entries = session.get("turns", [])
+                preview = next((str(turn.get("text", "")) for turn in entries if turn.get("speaker") == "You"), "Empty conversation")
+                print(f"{index}. {updated} · {sanitize_terminal_text(preview[:90])}")
+            continue
+        if user_text.lower() == "/delete-history":
+            path = history_path()
+            try:
+                path.unlink(missing_ok=True)
+                turns.clear()
+                session_id = str(uuid.uuid4())
+                print(f"{DIM}Saved conversation history deleted, including this conversation.{RESET}")
+            except OSError as error:
+                print(f"{RED}Could not delete history: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
             continue
         if user_text.lower() == "/mode":
             print(f"Mode: {mode}")
@@ -313,6 +391,7 @@ def main() -> int:
             continue
         try:
             turns.extend(ask_turn(user_text, turns, mode, leader, access))
+            save_history(turns, session_id)
         except KeyboardInterrupt:
             print(f"\n{DIM}Stopped the current turn.{RESET}")
         except AgentError as error:
