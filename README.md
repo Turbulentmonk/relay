@@ -37,6 +37,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 - `/mode codex` — use Codex only
 - `/mode claude` — use Claude only
 - `/mode both` — use both assistants
+- `/ask codex <message>` / `/ask claude <message>` — choose one assistant for a single turn without changing the current mode
 - `/new` — start a fresh conversation
 - `/history` — list conversations saved on this device (up to 30 days)
 - `/delete-history` — permanently delete saved conversations

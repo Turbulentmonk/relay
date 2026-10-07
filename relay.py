@@ -224,6 +224,26 @@ def conversation_context(turns: list[Turn]) -> str:
     )
 
 
+def ask_one(provider: str, user_text: str, turns: list[Turn], access: str) -> Turn:
+    context = conversation_context(turns)
+    file_scope = codex_file_scope(access)
+    if provider == "codex":
+        answer = run_codex(
+            f"You are Codex in Relay. Answer the user's request clearly and concisely. {file_scope}\n\nUser: {user_text}{context}",
+            access,
+        )
+        speaker = "Codex"
+    else:
+        answer = run_claude(
+            "You are Claude in Relay. Answer the user's request clearly and concisely. "
+            "Do not edit files or run commands.\n\n"
+            f"User: {user_text}{context}"
+        )
+        speaker = "Claude"
+    render(speaker, answer)
+    return Turn(speaker, answer)
+
+
 def codex_file_scope(access: str) -> str:
     if access == "workspace-write":
         return "You may read and edit files in the current working folder. Do not modify files outside that folder."
@@ -315,7 +335,7 @@ def main() -> int:
         if not user_text:
             continue
         if user_text.lower() in {"/help", "/?"}:
-            print("/mode codex|claude|both · /lead codex|claude · /access read-only|workspace-write · /new · /history · /delete-history · /clear · /status · /quit")
+            print("/mode codex|claude|both · /lead codex|claude · /ask codex|claude <message> · /access read-only|workspace-write · /new · /history · /delete-history · /clear · /status · /quit")
             continue
         if user_text.lower() == "/quit":
             save_history(turns, session_id)
@@ -385,6 +405,28 @@ def main() -> int:
                     print(f"{ORANGE}Workspace-write enabled: Codex may change files under {os.getcwd()}.{RESET}")
             else:
                 print(f"{RED}Choose read-only or workspace-write.{RESET}")
+            continue
+        if user_text.lower().startswith("/ask "):
+            parts = user_text.split(maxsplit=2)
+            if len(parts) < 3 or parts[1].lower() not in {"codex", "claude"}:
+                print(f"{RED}Use /ask codex <message> or /ask claude <message>.{RESET}")
+                continue
+            provider, request = parts[1].lower(), parts[2].strip()
+            if provider == "codex" and not codex_ready:
+                print(f"{ORANGE}Codex is not installed or could not be found.{RESET}")
+                continue
+            if provider == "claude" and not claude_ready:
+                print(f"{ORANGE}Claude Code is not installed or could not be found.{RESET}")
+                continue
+            try:
+                turns.append(Turn("You", request))
+                turns.append(ask_one(provider, request, turns[:-1], access))
+                save_history(turns, session_id)
+            except KeyboardInterrupt:
+                print(f"\n{DIM}Stopped the current turn.{RESET}")
+            except AgentError as error:
+                turns.pop()
+                print(f"{RED}Relay: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
             continue
         if user_text.startswith("/"):
             print(f"{RED}Unknown command. Type /help to see available commands.{RESET}")
