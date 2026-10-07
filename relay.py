@@ -20,6 +20,8 @@ TEAL = "\033[38;5;116m"
 ORANGE = "\033[38;5;215m"
 RED = "\033[38;5;203m"
 WHITE = "\033[38;5;252m"
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300
+MAX_PROVIDER_TIMEOUT_SECONDS = 3600
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
@@ -81,7 +83,7 @@ def run_claude(prompt: str) -> str:
 
 def run_jsonl_agent(name: str, command: list[str]) -> str:
     print(f"{DIM}Waiting for {name}... (Ctrl+C to stop){RESET}", flush=True)
-    result = subprocess.run(command, capture_output=True, text=True, env=provider_environment())
+    result = run_provider_command(name, command)
     if result.returncode:
         raise AgentError(agent_error_message(name, result.stderr or result.stdout, result.returncode))
     final_messages: list[str] = []
@@ -103,7 +105,7 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
 
 def run_json_agent(name: str, command: list[str]) -> str:
     print(f"{DIM}Waiting for {name}... (Ctrl+C to stop){RESET}", flush=True)
-    result = subprocess.run(command, capture_output=True, text=True, env=provider_environment())
+    result = run_provider_command(name, command)
     if result.returncode:
         raise AgentError(agent_error_message(name, result.stderr or result.stdout, result.returncode))
     try:
@@ -133,6 +135,34 @@ def provider_environment() -> dict[str, str]:
     for name in ("OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
         env.pop(name, None)
     return env
+
+
+def provider_timeout_seconds() -> int:
+    value = os.environ.get("RELAY_PROVIDER_TIMEOUT_SECONDS", str(DEFAULT_PROVIDER_TIMEOUT_SECONDS))
+    try:
+        timeout = int(value)
+    except ValueError as error:
+        raise AgentError("RELAY_PROVIDER_TIMEOUT_SECONDS must be a whole number between 1 and 3600.") from error
+    if not 1 <= timeout <= MAX_PROVIDER_TIMEOUT_SECONDS:
+        raise AgentError("RELAY_PROVIDER_TIMEOUT_SECONDS must be between 1 and 3600 seconds.")
+    return timeout
+
+
+def run_provider_command(name: str, command: list[str]) -> subprocess.CompletedProcess[str]:
+    timeout = provider_timeout_seconds()
+    try:
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=provider_environment(),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise AgentError(
+            f"{name} did not respond within {timeout} seconds. Relay stopped waiting; "
+            "try again or increase RELAY_PROVIDER_TIMEOUT_SECONDS."
+        ) from error
 
 
 def conversation_context(turns: list[Turn]) -> str:
