@@ -11,6 +11,7 @@ import subprocess
 import sys
 import textwrap
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +85,35 @@ def save_history(turns: list[Turn], session_id: str) -> None:
 
 class AgentError(RuntimeError):
     """A readable error from one of the local assistant tools."""
+
+
+@dataclass(frozen=True)
+class Provider:
+    key: str
+    label: str
+    discover: Callable[[], bool]
+    respond: Callable[[str, str], str]
+
+
+def provider_registry() -> dict[str, Provider]:
+    """Central provider adapter map; a new CLI needs one discovery and one invoke function."""
+    return {
+        "codex": Provider(
+            "codex", "Codex", lambda: codex_command() is not None,
+            lambda prompt, access: run_codex(prompt, access),
+        ),
+        "claude": Provider(
+            "claude", "Claude", lambda: shutil.which("claude") is not None,
+            lambda prompt, _access: run_claude(prompt),
+        ),
+    }
+
+
+def provider_named(name: str) -> Provider:
+    try:
+        return provider_registry()[name.lower()]
+    except KeyError as error:
+        raise AgentError(f"Unknown provider: {name}") from error
 
 
 def sanitize_terminal_text(text: str) -> str:
@@ -227,19 +257,12 @@ def conversation_context(turns: list[Turn]) -> str:
 def ask_one(provider: str, user_text: str, turns: list[Turn], access: str) -> Turn:
     context = conversation_context(turns)
     file_scope = codex_file_scope(access)
-    if provider == "codex":
-        answer = run_codex(
-            f"You are Codex in Relay. Answer the user's request clearly and concisely. {file_scope}\n\nUser: {user_text}{context}",
-            access,
-        )
-        speaker = "Codex"
-    else:
-        answer = run_claude(
-            "You are Claude in Relay. Answer the user's request clearly and concisely. "
-            "Do not edit files or run commands.\n\n"
-            f"User: {user_text}{context}"
-        )
-        speaker = "Claude"
+    adapter = provider_named(provider)
+    guardrails = f"You are {adapter.label} in Relay. Answer the user's request clearly and concisely. {file_scope}"
+    if adapter.key == "claude":
+        guardrails += " Do not edit files or run commands."
+    answer = adapter.respond(f"{guardrails}\n\nUser: {user_text}{context}", access)
+    speaker = adapter.label
     render(speaker, answer)
     return Turn(speaker, answer)
 
@@ -259,12 +282,12 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
         f"User: {user_text}{context}"
     )
     if mode == "codex":
-        answer = run_codex(first_prompt, access)
+        answer = provider_named("codex").respond(first_prompt, access)
         render("Codex", answer)
         return [Turn("You", user_text), Turn("Codex", answer)]
 
     if mode == "claude":
-        answer = run_claude(
+        answer = provider_named("claude").respond(
             "You are Claude participating in Relay. Answer the user's request clearly and concisely. "
             "Do not edit files or run commands.\n\n"
             f"User: {user_text}{context}"
@@ -273,7 +296,7 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
         return [Turn("You", user_text), Turn("Claude", answer)]
 
     other = "Claude" if leader == "Codex" else "Codex"
-    lead_answer = run_codex(first_prompt, access) if leader == "Codex" else run_claude(first_prompt)
+    lead_answer = provider_named(leader.lower()).respond(first_prompt, access)
     render(leader, lead_answer)
     add_prompt = (
         f"You are {other} in a group conversation. Add one useful perspective or a concrete "
@@ -281,7 +304,7 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
         f"User request: {user_text}\n\n{leader}: {lead_answer}{context}"
     )
     try:
-        add_answer = run_claude(add_prompt) if other == "Claude" else run_codex(add_prompt, access)
+        add_answer = provider_named(other.lower()).respond(add_prompt, access)
     except AgentError as error:
         raise AgentError(f"{other} contribution failed after {leader} replied: {error}") from error
     render(other, add_answer)
@@ -291,7 +314,7 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
         f"User request: {user_text}\n\n{leader}'s first answer: {lead_answer}\n\n{other}: {add_answer}{context}"
     )
     try:
-        final = run_codex(final_prompt, access) if leader == "Codex" else run_claude(final_prompt)
+        final = provider_named(leader.lower()).respond(final_prompt, access)
     except AgentError as error:
         raise AgentError(f"{leader} could not write the final summary: {error}") from error
     render(f"{leader} - conclusion", final)
@@ -299,8 +322,9 @@ def ask_turn(user_text: str, turns: list[Turn], mode: str, leader: str, access: 
 
 
 def main() -> int:
-    codex_ready = codex_command() is not None
-    claude_ready = shutil.which("claude") is not None
+    providers = provider_registry()
+    codex_ready = providers["codex"].discover()
+    claude_ready = providers["claude"].discover()
     print(f"{WHITE}Relay{RESET} {DIM}- terminal conversation - no provider API keys{RESET}")
     print(f"Codex: {TEAL}{'ready' if codex_ready else 'not found'}{RESET}  "
           f"Claude Code: {ORANGE}{'ready' if claude_ready else 'not installed'}{RESET}")
