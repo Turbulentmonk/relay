@@ -6,10 +6,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import selectors
 import shutil
 import subprocess
 import sys
 import textwrap
+import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -29,6 +31,7 @@ MAX_PROVIDER_TIMEOUT_SECONDS = 3600
 HISTORY_RETENTION_DAYS = 30
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+STREAMED_RESPONSES: list[str] = []
 
 
 @dataclass
@@ -140,6 +143,9 @@ def wrap_print(text: str, color: str = WHITE) -> None:
 
 
 def render(speaker: str, text: str) -> None:
+    if STREAMED_RESPONSES and STREAMED_RESPONSES[0] == text:
+        STREAMED_RESPONSES.pop(0)
+        return
     colors = {"You": BLUE, "Codex": TEAL, "Claude": ORANGE}
     print(f"\n{colors.get(speaker, WHITE)}* {speaker}{RESET}")
     wrap_print(text)
@@ -157,13 +163,33 @@ def run_claude(prompt: str) -> str:
     binary = shutil.which("claude")
     if not binary:
         raise RuntimeError("Claude Code CLI was not found. Install Claude Code and sign in with your Claude account.")
-    command = [binary, "-p", "--output-format", "json", "--permission-mode", "plan", prompt]
+    command = [binary, "-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--permission-mode", "plan", prompt]
     return run_json_agent("Claude", command)
 
 
 def run_jsonl_agent(name: str, command: list[str]) -> str:
-    print(f"{DIM}Waiting for {name}... (Ctrl+C to stop){RESET}", flush=True)
-    result = run_provider_command(name, command)
+    print(f"\n{TEAL if name == 'Codex' else ORANGE}* {name}{RESET}\n{DIM}Streaming reply... (Ctrl+C to stop){RESET}", flush=True)
+    deltas: list[str] = []
+
+    def on_line(line: str) -> None:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            return
+        delta = event.get("delta")
+        if (event.get("type") in {"agent_message_delta", "content_block_delta", "item.agent_message.delta"}
+                or "delta" in event.get("type", "")) and isinstance(delta, str):
+            deltas.append(delta)
+            print(sanitize_terminal_text(delta), end="", flush=True)
+        elif event.get("type") in {"item.updated", "item.completed"}:
+            item = event.get("item", {})
+            payload = item.get("agent_message_delta", {})
+            delta_text = payload.get("delta") if isinstance(payload, dict) else None
+            if isinstance(delta_text, str):
+                deltas.append(delta_text)
+                print(sanitize_terminal_text(delta_text), end="", flush=True)
+
+    result = run_provider_command(name, command, on_line)
     if result.returncode:
         raise AgentError(agent_error_message(name, result.stderr or result.stdout, result.returncode))
     final_messages: list[str] = []
@@ -180,14 +206,38 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
     response = final_messages[-1].strip()
     if not response:
         raise AgentError(f"{name} returned an empty reply. Try sending the request again.")
+    if not deltas:
+        wrap_print(response)
+    else:
+        print()
+        STREAMED_RESPONSES.append(response)
     return response
 
 
 def run_json_agent(name: str, command: list[str]) -> str:
-    print(f"{DIM}Waiting for {name}... (Ctrl+C to stop){RESET}", flush=True)
-    result = run_provider_command(name, command)
+    print(f"\n{ORANGE}* {name}{RESET}\n{DIM}Streaming reply... (Ctrl+C to stop){RESET}", flush=True)
+    chunks: list[str] = []
+
+    def on_line(line: str) -> None:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return
+        event = payload.get("event", {})
+        delta = event.get("delta", {}) if isinstance(event, dict) else {}
+        text = delta.get("text") if isinstance(delta, dict) else None
+        if payload.get("type") == "stream_event" and isinstance(text, str):
+            chunks.append(text)
+            print(sanitize_terminal_text(text), end="", flush=True)
+
+    result = run_provider_command(name, command, on_line)
     if result.returncode:
         raise AgentError(agent_error_message(name, result.stderr or result.stdout, result.returncode))
+    if chunks:
+        print()
+        response = "".join(chunks).strip()
+        STREAMED_RESPONSES.append(response)
+        return response
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -228,21 +278,65 @@ def provider_timeout_seconds() -> int:
     return timeout
 
 
-def run_provider_command(name: str, command: list[str]) -> subprocess.CompletedProcess[str]:
+def run_provider_command(name: str, command: list[str], on_stdout_line: Callable[[str], None] | None = None) -> subprocess.CompletedProcess[str]:
     timeout = provider_timeout_seconds()
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+    process: subprocess.Popen[str] | None = None
+    selector = selectors.DefaultSelector()
     try:
-        return subprocess.run(
+        process = subprocess.Popen(
             command,
-            capture_output=True,
             text=True,
             env=provider_environment(),
-            timeout=timeout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
         )
+        assert process.stdout is not None and process.stderr is not None
+        selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+        selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+        deadline = time.monotonic() + timeout
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout)
+            for key, _ in selector.select(min(remaining, 0.2)):
+                line = key.fileobj.readline()
+                if line == "":
+                    selector.unregister(key.fileobj)
+                    continue
+                if key.data == "stdout":
+                    stdout_lines.append(line)
+                    if on_stdout_line:
+                        on_stdout_line(line.rstrip("\r\n"))
+                else:
+                    stderr_lines.append(line)
+        return_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        return subprocess.CompletedProcess(command, return_code, "".join(stdout_lines), "".join(stderr_lines))
     except subprocess.TimeoutExpired as error:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
         raise AgentError(
             f"{name} did not respond within {timeout} seconds. Relay stopped waiting; "
             "try again or increase RELAY_PROVIDER_TIMEOUT_SECONDS."
         ) from error
+    except KeyboardInterrupt:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        raise
+    finally:
+        selector.close()
 
 
 def conversation_context(turns: list[Turn]) -> str:
