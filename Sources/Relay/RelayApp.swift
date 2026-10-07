@@ -21,10 +21,101 @@ private enum Palette {
     static let accent = Color(red: 0.20, green: 0.40, blue: 0.96)
 }
 
-private enum Assistant: String, CaseIterable, Identifiable {
+private enum Assistant: String, CaseIterable, Identifiable, Sendable {
     case codex = "Codex", claude = "Claude"
     var id: String { rawValue }
     var tint: Color { self == .codex ? Palette.codex : Palette.claude }
+}
+
+private struct AssistantReply: Sendable {
+    let assistant: Assistant
+    let text: String
+}
+
+private final class NativeCLIController: @unchecked Sendable {
+    private let lock = NSLock()
+    private var child: Process?
+
+    static func executable(for assistant: Assistant) -> URL? {
+        let environment = ProcessInfo.processInfo.environment
+        let paths = (environment["PATH"] ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin").split(separator: ":").map(String.init)
+        let candidates = assistant == .codex
+            ? paths.map { "\($0)/codex" } + ["/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"]
+            : paths.map { "\($0)/claude" }
+        return candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }).map { URL(fileURLWithPath: $0) }
+    }
+
+    func cancel() {
+        lock.lock()
+        let process = child
+        lock.unlock()
+        if let process, process.isRunning { process.terminate() }
+    }
+
+    func respond(_ assistant: Assistant, prompt: String) throws -> String {
+        guard let executable = Self.executable(for: assistant) else {
+            throw NSError(domain: "Relay", code: 1, userInfo: [NSLocalizedDescriptionKey: "\(assistant.rawValue) CLI was not found. Install it and sign in, then reopen Relay."])
+        }
+        let process = Process()
+        process.executableURL = executable
+        process.currentDirectoryURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["PWD"] ?? FileManager.default.currentDirectoryPath)
+        if assistant == .codex {
+            process.arguments = ["exec", "--ephemeral", "--json", "--sandbox", "read-only", prompt]
+        } else {
+            process.arguments = ["-p", "--output-format", "json", "--permission-mode", "plan", prompt]
+        }
+        var environment = ProcessInfo.processInfo.environment
+        ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"].forEach { environment.removeValue(forKey: $0) }
+        process.environment = environment
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+
+        lock.lock()
+        child = process
+        lock.unlock()
+        defer {
+            lock.lock()
+            if child === process { child = nil }
+            lock.unlock()
+        }
+
+        try process.run()
+        let timeout = DispatchSource.makeTimerSource(queue: .global())
+        timeout.schedule(deadline: .now() + 300)
+        timeout.setEventHandler { [weak self] in self?.cancel() }
+        timeout.resume()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        timeout.cancel()
+        process.waitUntilExit()
+        let raw = String(data: data, encoding: .utf8) ?? ""
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "Relay", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(assistant.rawValue) could not complete the request." : raw])
+        }
+        return try Self.response(assistant, from: raw)
+    }
+
+    private static func response(_ assistant: Assistant, from output: String) throws -> String {
+        if assistant == .codex {
+            let messages = output.split(whereSeparator: \.isNewline).compactMap { line -> String? in
+                guard let data = String(line).data(using: .utf8),
+                      let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let item = event["item"] as? [String: Any],
+                      item["type"] as? String == "agent_message" else { return nil }
+                return item["text"] as? String
+            }
+            if let text = messages.last, !text.isEmpty { return text }
+        } else if let data = output.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let text = payload["result"] as? String, !text.isEmpty {
+            return text
+        }
+        let fallback = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fallback.isEmpty else {
+            throw NSError(domain: "Relay", code: 2, userInfo: [NSLocalizedDescriptionKey: "\(assistant.rawValue) returned an empty reply."])
+        }
+        return fallback
+    }
 }
 
 private struct Message: Identifiable {
@@ -40,14 +131,72 @@ private final class ConversationModel {
     var messages: [Message] = []
     var runMode = "Run with Codex + Claude"
     var isRunning = false
-    var activity = "Relay is ready. Assistant automation is not configured yet."
+    var activity = "Relay is ready."
+    var codexAvailable = NativeCLIController.executable(for: .codex) != nil
+    var claudeAvailable = NativeCLIController.executable(for: .claude) != nil
+    private var controller: NativeCLIController?
 
     func send() {
+        guard !isRunning else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         messages.append(Message(author: .you, text: text))
         draft = ""
-        activity = "Request queued locally. Assistant discovery and dispatch are not implemented yet."
+        isRunning = true
+        activity = "Assistant is working…"
+        codexAvailable = NativeCLIController.executable(for: .codex) != nil
+        claudeAvailable = NativeCLIController.executable(for: .claude) != nil
+        let requested: [Assistant] = runMode == "Run with Codex" ? [.codex] : runMode == "Run with Claude" ? [.claude] : [.codex, .claude]
+        let selected = requested.filter { NativeCLIController.executable(for: $0) != nil }
+        guard !selected.isEmpty else {
+            isRunning = false
+            activity = "The selected assistant CLI was not found. Install it and sign in, then reopen Relay."
+            return
+        }
+        let history = messages.dropLast().map { message -> String in
+            let name: String
+            switch message.author {
+            case .you: name = "You"
+            case .assistant(let assistant): name = assistant.rawValue
+            }
+            return "\(name): \(message.text)"
+        }.joined(separator: "\n\n")
+        let prompt = "You are participating in Relay. Answer the user's request clearly and concisely.\n\nEarlier conversation:\n\(history)\n\nUser: \(text)"
+        let runner = NativeCLIController()
+        controller = runner
+        Task.detached { [weak self] in
+            do {
+                for assistant in selected {
+                    await MainActor.run {
+                        guard let self else { return }
+                        self.activity = "\(assistant.rawValue) is working…"
+                    }
+                    let reply = AssistantReply(assistant: assistant, text: try runner.respond(assistant, prompt: prompt))
+                    await MainActor.run {
+                        guard let self else { return }
+                        self.messages.append(Message(author: .assistant(reply.assistant), text: reply.text))
+                    }
+                }
+                await MainActor.run {
+                    guard let self else { return }
+                    self.activity = "Reply complete."
+                    self.isRunning = false
+                    self.controller = nil
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self else { return }
+                    self.activity = error.localizedDescription
+                    self.isRunning = false
+                    self.controller = nil
+                }
+            }
+        }
+    }
+
+    func stop() {
+        controller?.cancel()
+        activity = "Stopping assistant…"
     }
 }
 
@@ -63,6 +212,7 @@ private struct ConversationView: View {
                 Spacer()
                 Button("New Conversation") { model.messages = []; model.activity = "New conversation" }
                     .buttonStyle(.bordered)
+                    .disabled(model.isRunning)
             }.padding(.horizontal, 22).padding(.vertical, 14)
 
             ScrollViewReader { proxy in
@@ -88,7 +238,7 @@ private struct ConversationView: View {
                 Text("Details & activity").font(.title2.bold())
                 Text(model.activity).foregroundStyle(.secondary)
                 Divider()
-                Label("Local automation not configured", systemImage: "desktopcomputer")
+                Label("Codex runs read-only; Claude runs in plan mode.", systemImage: "lock.shield")
                 Spacer()
             }.padding(24).frame(width: 440, height: 250).background(Palette.background)
         }
@@ -130,18 +280,18 @@ private struct ConversationView: View {
                     Text("Run with Claude").tag("Run with Claude")
                 }.frame(maxWidth: 260)
                 Spacer()
-                Button("Stop") { model.isRunning = false }.disabled(!model.isRunning)
+                Button("Stop") { model.stop() }.disabled(!model.isRunning)
                 Button("Send") { model.send() }.buttonStyle(.borderedProminent).tint(Palette.accent)
                     .keyboardShortcut(.return, modifiers: [.command])
-                    .disabled(model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(model.isRunning || model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }.padding(14).background(Palette.panel).clipShape(RoundedRectangle(cornerRadius: 13))
     }
 
     private var footer: some View {
         HStack(spacing: 14) {
-            Text("Codex: not connected")
-            Text("Claude: not connected")
+            Text("Codex: \(model.codexAvailable ? "ready" : "not found")")
+            Text("Claude: \(model.claudeAvailable ? "ready" : "not found")")
             Spacer(minLength: 8)
             Text(model.activity).lineLimit(1).foregroundStyle(.secondary)
             Button("Details & activity") { showActivity = true }
@@ -181,20 +331,13 @@ private struct MessageRow: View {
 
 private struct OptionsView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("relay.backgroundMode") private var backgroundMode = true
-    @AppStorage("relay.autoApprove") private var autoApprove = false
-    @AppStorage("relay.fullControl") private var fullControl = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Options").font(.title2.bold())
-            Toggle("Background mode", isOn: $backgroundMode)
-            Text("Keep assistant interactions in the background. Relay should never activate another app or take keyboard focus.")
-                .font(.callout).foregroundStyle(.secondary)
-            Divider()
-            Toggle("Auto-approve actions", isOn: $autoApprove)
-            Toggle("Full control", isOn: $fullControl)
-            Text("These are local preferences only. The automation adapter and each assistant app’s permissions must be configured on this Mac.")
+            Label("Codex uses read-only access.", systemImage: "lock")
+            Label("Claude uses plan mode.", systemImage: "lock")
+            Text("Relay uses the sign-ins saved by each CLI and removes supported API-key variables before launching it. The native app does not grant automatic approvals or full computer control.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(.borderedProminent) }
         }.padding(24).frame(width: 480).background(Palette.background)

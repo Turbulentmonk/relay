@@ -9,7 +9,7 @@ Relay is a small Terminal chat where you can talk with Codex and Claude together
 - Lets you switch providers with `/mode codex`, `/mode claude`, or `/mode both`, and start a fresh in-memory conversation with `/new`.
 - Starts Codex with read-only access. `/access workspace-write` opts into letting Codex edit files in the directory where Relay was started. Claude runs in plan mode.
 
-Relay is the Python terminal app. `Sources/Relay/RelayApp.swift` is an earlier SwiftUI mock-up and does not connect to the assistants.
+Relay includes a Python terminal app and a SwiftUI macOS app. The native app can run Codex, Claude, or both through their installed command-line tools; Codex stays read-only and Claude stays in plan mode.
 
 ## What you need
 
@@ -45,7 +45,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 
 If an assistant reports that it has hit a usage or rate limit, Relay tells you which one could not respond and suggests trying again after the limit resets.
 
-Relay stops waiting for an assistant after five minutes by default. Set `RELAY_PROVIDER_TIMEOUT_SECONDS` to a whole number from 1 to 3600 to change the limit.
+The terminal app streams assistant replies and stops a child process on Ctrl+C. It waits up to five minutes by default; set `RELAY_PROVIDER_TIMEOUT_SECONDS` to a whole number from 1 to 3600 to change that limit.
 
 Codex starts in read-only mode. To let it read and edit files in the folder where Relay was started, type `/access workspace-write`. Type `/access read-only` to switch back. Start Relay from the project folder you want Codex to work in. Claude uses plan mode. Relay does not turn on full computer access.
 
