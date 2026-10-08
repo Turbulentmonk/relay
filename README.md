@@ -40,6 +40,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 - `/ask codex <message>` / `/ask claude <message>` — choose one assistant for a single turn without changing the current mode
 - `/new` — start a fresh conversation
 - `/history` — list conversations saved on this device (up to 30 days)
+- `/history open N` — reopen a conversation from the list and continue it
 - `/delete-history` — permanently delete saved conversations
 - `/quit` — close Relay
 

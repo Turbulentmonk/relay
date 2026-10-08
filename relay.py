@@ -453,7 +453,7 @@ def main() -> int:
         if not user_text:
             continue
         if user_text.lower() in {"/help", "/?"}:
-            print("/mode codex|claude|both · /lead codex|claude · /ask codex|claude <message> · /access read-only|workspace-write · /new · /history · /delete-history · /clear · /status · /quit")
+            print("/mode codex|claude|both · /lead codex|claude · /ask codex|claude <message> · /access read-only|workspace-write · /new · /history [open N] · /delete-history · /clear · /status · /quit")
             continue
         if user_text.lower() == "/quit":
             save_history(turns, session_id)
@@ -470,8 +470,28 @@ def main() -> int:
             session_id = str(uuid.uuid4())
             print(f"{DIM}Started a new conversation.{RESET}")
             continue
-        if user_text.lower() == "/history":
+        if user_text.lower() == "/history" or user_text.lower().startswith("/history open"):
+            save_history(turns, session_id)
             sessions = load_history()
+            if user_text.lower().startswith("/history open"):
+                try:
+                    requested_index = int(user_text.split(maxsplit=2)[2])
+                except (IndexError, ValueError):
+                    print(f"{RED}Use /history open N with a number from the list.{RESET}")
+                    continue
+                if requested_index < 1 or requested_index > len(sessions):
+                    print(f"{RED}That conversation number is no longer available. Type /history to see the current list.{RESET}")
+                    continue
+                selected = sessions[requested_index - 1]
+                saved_turns = selected.get("turns", [])
+                turns = [
+                    Turn(str(item.get("speaker", "")), str(item.get("text", "")), str(item.get("created_at", "")))
+                    for item in saved_turns
+                    if isinstance(item, dict) and item.get("speaker") and item.get("text")
+                ]
+                session_id = str(selected.get("id") or uuid.uuid4())
+                print(f"{DIM}Reopened conversation {requested_index} with {len(turns)} saved turns.{RESET}")
+                continue
             print(f"{DIM}{len(sessions)} saved conversation(s), retained for up to {HISTORY_RETENTION_DAYS} days in {history_path()}.{RESET}")
             for index, session in enumerate(sessions[-10:], start=max(1, len(sessions) - 9)):
                 try:
@@ -481,6 +501,8 @@ def main() -> int:
                 entries = session.get("turns", [])
                 preview = next((str(turn.get("text", "")) for turn in entries if turn.get("speaker") == "You"), "Empty conversation")
                 print(f"{index}. {updated} · {sanitize_terminal_text(preview[:90])}")
+            if sessions:
+                print(f"{DIM}Open one with /history open N.{RESET}")
             continue
         if user_text.lower() == "/delete-history":
             path = history_path()
