@@ -63,7 +63,26 @@ def load_history() -> list[dict]:
                 retained.append(session)
         except (KeyError, TypeError, ValueError):
             continue
+    if len(retained) != len(sessions):
+        write_history(retained)
     return retained
+
+
+def write_history(sessions: list[dict]) -> None:
+    path = history_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(sessions, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        path.parent.chmod(0o700)
+        temporary.chmod(0o600)
+    except OSError:
+        pass
+    temporary.replace(path)
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def save_history(turns: list[Turn], session_id: str) -> None:
@@ -79,11 +98,7 @@ def save_history(turns: list[Turn], session_id: str) -> None:
         }
         sessions = [session for session in sessions if session.get("id") != session_id]
         sessions.append(snapshot)
-    path = history_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(sessions, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    write_history(sessions)
 
 
 class AgentError(RuntimeError):
