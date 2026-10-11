@@ -42,6 +42,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 - `/history` — list conversations saved on this device (up to 30 days)
 - `/history open N` — reopen a conversation from the list and continue it
 - `/delete-history` — permanently delete saved conversations
+- `/status` — show the active providers, access mode, and workspace folder
 - `/quit` — close Relay
 
 If an assistant reports that it has hit a usage or rate limit, Relay tells you which one could not respond and suggests trying again after the limit resets.
