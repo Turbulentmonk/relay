@@ -468,7 +468,17 @@ def main() -> int:
         if not user_text:
             continue
         if user_text.lower() in {"/help", "/?"}:
-            print("/mode codex|claude|both · /lead codex|claude · /ask codex|claude <message> · /access read-only|workspace-write · /new · /history [open N] · /delete-history · /clear · /status · /quit")
+            print("Commands:")
+            print("  /mode codex|claude|both       Choose which assistants respond")
+            print("  /lead codex|claude            Choose who leads in both mode")
+            print("  /ask codex|claude <message>   Send one request to a single assistant")
+            print("  /access read-only|workspace-write  Set Codex file access")
+            print("  /new                          Start a fresh conversation")
+            print("  /history [open N]             List or reopen saved conversations")
+            print("  /delete-history               Delete saved conversations")
+            print("  /clear                        Clear the terminal screen")
+            print("  /status                       Show providers, access, and workspace")
+            print("  /quit                         Exit Relay")
             continue
         if user_text.lower() == "/quit":
             save_history(turns, session_id)
