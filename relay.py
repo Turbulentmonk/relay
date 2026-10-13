@@ -525,7 +525,8 @@ def main() -> int:
                 except (KeyError, ValueError):
                     updated = "unknown date"
                 entries = session.get("turns", [])
-                preview = next((str(turn.get("text", "")) for turn in entries if turn.get("speaker") == "You"), "Empty conversation")
+                preview = next((str(turn.get("text", "")) for turn in entries
+                                if isinstance(turn, dict) and turn.get("speaker") == "You"), "Empty conversation")
                 print(f"{index}. {updated} · {sanitize_terminal_text(preview[:90])}")
             if sessions:
                 print(f"{DIM}Open one with /history open N.{RESET}")
