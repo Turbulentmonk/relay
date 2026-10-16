@@ -470,9 +470,9 @@ def main() -> int:
         if user_text.lower() in {"/help", "/?"}:
             print("Commands:")
             print("  /mode codex|claude|both       Choose which assistants respond")
-            print("  /lead codex|claude            Choose who leads in both mode")
+            print("  /lead [codex|claude]          Show or choose who leads in both mode")
             print("  /ask codex|claude <message>   Send one request to a single assistant")
-            print("  /access read-only|workspace-write  Set Codex file access")
+            print("  /access [read-only|workspace-write]  Show or set Codex file access")
             print("  /new                          Start a fresh conversation")
             print("  /history [open N]             List or reopen saved conversations")
             print("  /delete-history               Delete saved conversations")
@@ -527,6 +527,7 @@ def main() -> int:
                 entries = session.get("turns", [])
                 preview = next((str(turn.get("text", "")) for turn in entries
                                 if isinstance(turn, dict) and turn.get("speaker") == "You"), "Empty conversation")
+                preview = " ".join(preview.split())
                 print(f"{index}. {updated} · {sanitize_terminal_text(preview[:90])}")
             if sessions:
                 print(f"{DIM}Open one with /history open N.{RESET}")
@@ -555,6 +556,9 @@ def main() -> int:
             else:
                 print(f"{RED}Choose codex, claude, or both.{RESET}")
             continue
+        if user_text.lower() == "/lead":
+            print(f"Lead: {leader} (used in both mode)")
+            continue
         if user_text.lower().startswith("/lead "):
             requested = user_text.split(maxsplit=1)[1].lower()
             if requested in {"codex", "claude"}:
@@ -562,6 +566,9 @@ def main() -> int:
                 print(f"{DIM}{leader} will lead when both assistants are selected.{RESET}")
             else:
                 print(f"{RED}Choose codex or claude.{RESET}")
+            continue
+        if user_text.lower() == "/access":
+            print(f"Codex file access: {access}")
             continue
         if user_text.lower().startswith("/access "):
             requested = user_text.split(maxsplit=1)[1].lower()
