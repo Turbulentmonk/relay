@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import codecs
 import os
 import re
 import selectors
@@ -297,16 +298,19 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
     timeout = provider_timeout_seconds()
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
-    process: subprocess.Popen[str] | None = None
+    process: subprocess.Popen[bytes] | None = None
     selector = selectors.DefaultSelector()
+    decoders = {
+        "stdout": codecs.getincrementaldecoder("utf-8")(errors="replace"),
+        "stderr": codecs.getincrementaldecoder("utf-8")(errors="replace"),
+    }
+    pending_stdout = ""
     try:
         process = subprocess.Popen(
             command,
-            text=True,
             env=provider_environment(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=1,
         )
         assert process.stdout is not None and process.stderr is not None
         selector.register(process.stdout, selectors.EVENT_READ, "stdout")
@@ -317,16 +321,24 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(command, timeout)
             for key, _ in selector.select(min(remaining, 0.2)):
-                line = key.fileobj.readline()
-                if line == "":
-                    selector.unregister(key.fileobj)
-                    continue
-                if key.data == "stdout":
-                    stdout_lines.append(line)
-                    if on_stdout_line:
-                        on_stdout_line(line.rstrip("\r\n"))
+                chunk = key.fileobj.read1(4096)
+                name_for_stream = key.data
+                text = decoders[name_for_stream].decode(chunk, final=not chunk)
+                if name_for_stream == "stdout":
+                    stdout_lines.append(text)
+                    pending_stdout += text
+                    while "\n" in pending_stdout:
+                        line, pending_stdout = pending_stdout.split("\n", 1)
+                        if on_stdout_line:
+                            on_stdout_line(line.rstrip("\r"))
+                    if not chunk and pending_stdout:
+                        if on_stdout_line:
+                            on_stdout_line(pending_stdout.rstrip("\r"))
+                        pending_stdout = ""
                 else:
-                    stderr_lines.append(line)
+                    stderr_lines.append(text)
+                if not chunk:
+                    selector.unregister(key.fileobj)
         return_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
         return subprocess.CompletedProcess(command, return_code, "".join(stdout_lines), "".join(stderr_lines))
     except subprocess.TimeoutExpired as error:
