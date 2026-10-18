@@ -611,14 +611,25 @@ def main() -> int:
             if provider == "claude" and not claude_ready:
                 print(f"{ORANGE}Claude Code is not installed or could not be found.{RESET}")
                 continue
+            request_pending = False
             try:
                 turns.append(Turn("You", request))
-                turns.append(ask_one(provider, request, turns[:-1], access))
+                request_pending = True
+                answer = ask_one(provider, request, turns[:-1], access)
+                turns.append(answer)
+                request_pending = False
                 save_history(turns, session_id)
             except KeyboardInterrupt:
+                if request_pending and turns and turns[-1].speaker == "You" and turns[-1].text == request:
+                    turns.pop()
                 print(f"\n{DIM}Stopped the current turn.{RESET}")
             except AgentError as error:
-                turns.pop()
+                if request_pending and turns and turns[-1].speaker == "You" and turns[-1].text == request:
+                    turns.pop()
+                print(f"{RED}Relay: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
+            except Exception as error:
+                if request_pending and turns and turns[-1].speaker == "You" and turns[-1].text == request:
+                    turns.pop()
                 print(f"{RED}Relay: {sanitize_terminal_text(str(error))}{RESET}", file=sys.stderr)
             continue
         if user_text.startswith("/"):
