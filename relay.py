@@ -11,6 +11,7 @@ import selectors
 import shutil
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
 import uuid
@@ -72,18 +73,24 @@ def load_history() -> list[dict]:
 def write_history(sessions: list[dict]) -> None:
     path = history_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(sessions, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         path.parent.chmod(0o700)
-        temporary.chmod(0o600)
     except OSError:
         pass
-    temporary.replace(path)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".history-", suffix=".tmp", dir=path.parent)
     try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+        with os.fdopen(descriptor, "w", encoding="utf-8") as temporary:
+            json.dump(sessions, temporary, ensure_ascii=False, indent=2)
+        os.replace(temporary_name, path)
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+    finally:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
 
 
 def save_history(turns: list[Turn], session_id: str) -> None:
