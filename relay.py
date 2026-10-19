@@ -231,7 +231,11 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        item = event.get("item", {})
+        if not isinstance(event, dict):
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict):
+            continue
         if item.get("type") == "agent_message" and isinstance(item.get("text"), str):
             final_messages.append(item["text"])
     if not final_messages:
