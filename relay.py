@@ -260,6 +260,8 @@ def run_json_agent(name: str, command: list[str]) -> str:
             payload = json.loads(line)
         except json.JSONDecodeError:
             return
+        if not isinstance(payload, dict):
+            return
         event = payload.get("event", {})
         delta = event.get("delta", {}) if isinstance(event, dict) else {}
         text = delta.get("text") if isinstance(delta, dict) else None
@@ -279,6 +281,8 @@ def run_json_agent(name: str, command: list[str]) -> str:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
         return "\n".join(line.rstrip() for line in result.stdout.strip().splitlines())
+    if not isinstance(payload, dict):
+        raise AgentError(f"{name} returned a response Relay couldn't read. Try running its command-line tool directly.")
     text = payload.get("result") or payload.get("message") or payload.get("text")
     if not text:
         raise AgentError(f"{name} returned a response Relay couldn't read. Try running its command-line tool directly.")
