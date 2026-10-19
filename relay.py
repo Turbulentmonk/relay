@@ -213,7 +213,9 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
             deltas.append(delta)
             print(sanitize_terminal_text(delta), end="", flush=True)
         elif event_type in {"item.updated", "item.completed"}:
-            item = event.get("item", {})
+            item = event.get("item")
+            if not isinstance(item, dict):
+                return
             payload = item.get("agent_message_delta", {})
             delta_text = payload.get("delta") if isinstance(payload, dict) else None
             if isinstance(delta_text, str):
