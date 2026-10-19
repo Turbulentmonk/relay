@@ -44,7 +44,8 @@ class Turn:
 
 
 def history_path() -> Path:
-    base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    configured_base = os.environ.get("XDG_DATA_HOME", "").strip()
+    base = Path(configured_base).expanduser() if configured_base else Path.home() / ".local" / "share"
     return base / "relay" / "history.json"
 
 
