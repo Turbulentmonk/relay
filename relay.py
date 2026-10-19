@@ -62,6 +62,8 @@ def load_history() -> list[dict]:
     for session in sessions:
         try:
             created = datetime.fromisoformat(session["updated_at"])
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
             if created >= cutoff and isinstance(session.get("turns"), list):
                 retained.append(session)
         except (KeyError, TypeError, ValueError):
