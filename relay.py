@@ -202,12 +202,17 @@ def run_jsonl_agent(name: str, command: list[str]) -> str:
             event = json.loads(line)
         except json.JSONDecodeError:
             return
+        if not isinstance(event, dict):
+            return
+        event_type = event.get("type")
+        if not isinstance(event_type, str):
+            return
         delta = event.get("delta")
-        if (event.get("type") in {"agent_message_delta", "content_block_delta", "item.agent_message.delta"}
-                or "delta" in event.get("type", "")) and isinstance(delta, str):
+        if (event_type in {"agent_message_delta", "content_block_delta", "item.agent_message.delta"}
+                or "delta" in event_type) and isinstance(delta, str):
             deltas.append(delta)
             print(sanitize_terminal_text(delta), end="", flush=True)
-        elif event.get("type") in {"item.updated", "item.completed"}:
+        elif event_type in {"item.updated", "item.completed"}:
             item = event.get("item", {})
             payload = item.get("agent_message_delta", {})
             delta_text = payload.get("delta") if isinstance(payload, dict) else None
