@@ -525,7 +525,7 @@ def main() -> int:
             continue
         if user_text.lower() == "/status":
             print(f"Mode: {mode} · Lead: {leader} · Codex: {'ready' if codex_ready else 'not found'} · Claude Code: {'ready' if claude_ready else 'not found'} · Access: {access}")
-            print(f"Workspace: {os.getcwd()}")
+            print(f"Workspace: {sanitize_terminal_text(os.getcwd())}")
             continue
         if user_text.lower() == "/new":
             save_history(turns, session_id)
