@@ -533,10 +533,12 @@ def main() -> int:
             session_id = str(uuid.uuid4())
             print(f"{DIM}Started a new conversation.{RESET}")
             continue
-        if user_text.lower() == "/history" or user_text.lower().startswith("/history open"):
+        history_command = user_text.lower()
+        open_history = history_command == "/history open" or history_command.startswith("/history open ")
+        if history_command == "/history" or open_history:
             save_history(turns, session_id)
             sessions = load_history()
-            if user_text.lower().startswith("/history open"):
+            if open_history:
                 try:
                     requested_index = int(user_text.split(maxsplit=2)[2])
                 except (IndexError, ValueError):
