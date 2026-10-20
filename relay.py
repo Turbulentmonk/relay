@@ -561,7 +561,10 @@ def main() -> int:
             print(f"{DIM}{len(sessions)} saved conversation(s), retained for up to {HISTORY_RETENTION_DAYS} days in {history_path()}.{RESET}")
             for index, session in enumerate(sessions[-10:], start=max(1, len(sessions) - 9)):
                 try:
-                    updated = datetime.fromisoformat(session["updated_at"]).astimezone().strftime("%Y-%m-%d %H:%M")
+                    updated_at = datetime.fromisoformat(session["updated_at"])
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
+                    updated = updated_at.astimezone().strftime("%Y-%m-%d %H:%M")
                 except (KeyError, ValueError):
                     updated = "unknown date"
                 entries = session.get("turns", [])
