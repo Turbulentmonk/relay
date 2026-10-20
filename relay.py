@@ -319,6 +319,20 @@ def provider_timeout_seconds() -> int:
     return timeout
 
 
+def stop_provider_process(process: subprocess.Popen[bytes] | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
 def run_provider_command(name: str, command: list[str], on_stdout_line: Callable[[str], None] | None = None) -> subprocess.CompletedProcess[str]:
     timeout = provider_timeout_seconds()
     stdout_lines: list[str] = []
@@ -367,25 +381,16 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
         return_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
         return subprocess.CompletedProcess(command, return_code, "".join(stdout_lines), "".join(stderr_lines))
     except subprocess.TimeoutExpired as error:
-        if process and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        stop_provider_process(process)
         raise AgentError(
             f"{name} did not respond within {timeout} seconds. Relay stopped waiting; "
             "try again or increase RELAY_PROVIDER_TIMEOUT_SECONDS."
         ) from error
     except KeyboardInterrupt:
-        if process and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        stop_provider_process(process)
+        raise
+    except BaseException:
+        stop_provider_process(process)
         raise
     finally:
         selector.close()
