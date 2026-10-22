@@ -164,9 +164,12 @@ def codex_command() -> str | None:
 def wrap_print(text: str, color: str = WHITE) -> None:
     text = sanitize_terminal_text(text)
     width = max(40, shutil.get_terminal_size((80, 24)).columns - 4)
-    for paragraph in text.strip().splitlines():
+    paragraphs = text.strip().splitlines()
+    for index, paragraph in enumerate(paragraphs):
         if paragraph.strip():
             print(color + textwrap.fill(paragraph, width=width) + RESET)
+        elif index > 0 and index < len(paragraphs) - 1:
+            print()
 
 
 def render(speaker: str, text: str) -> None:
