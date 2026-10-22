@@ -58,4 +58,4 @@ Relay shows whether it can find each command-line tool. Codex is included in the
 
 ## Current limitations and project notes
 
-Relay saves conversation transcripts locally under the user data directory, keeps them for up to 30 days, and provides `/history` and `/delete-history` controls. No transcript is sent to Relay servers. Relay currently has no automated test suite or CI workflow. Its terminal output and child-process cancellation are listed for follow-up in [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
+Relay saves conversation transcripts locally at `$XDG_DATA_HOME/relay/history.json`, or `~/.local/share/relay/history.json` when `XDG_DATA_HOME` is unset or blank. It keeps them for up to 30 days and provides `/history` and `/delete-history` controls. No transcript is sent to Relay servers. Relay currently has no automated test suite or CI workflow. Its terminal output and child-process handling notes are in [`docs/goals-and-potential-issues.md`](docs/goals-and-potential-issues.md).
