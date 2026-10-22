@@ -151,13 +151,14 @@ def sanitize_terminal_text(text: str) -> str:
 
 def codex_command() -> str | None:
     configured = os.environ.get("RELAY_CODEX_BIN")
-    if configured and os.path.isfile(os.path.expanduser(configured)):
-        return os.path.expanduser(configured)
+    configured_path = os.path.expanduser(configured) if configured else ""
+    if configured_path and os.path.isfile(configured_path) and os.access(configured_path, os.X_OK):
+        return configured_path
     found = shutil.which("codex")
-    if found:
+    if found and os.access(found, os.X_OK):
         return found
     bundled = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
-    return bundled if os.path.isfile(bundled) else None
+    return bundled if os.path.isfile(bundled) and os.access(bundled, os.X_OK) else None
 
 
 def wrap_print(text: str, color: str = WHITE) -> None:
