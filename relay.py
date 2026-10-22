@@ -296,6 +296,8 @@ def agent_error_message(name: str, details: str, status: int) -> str:
         return f"{name} couldn't respond because its service reported a usage or rate limit. Wait for the limit to reset, then try again."
     details = details.strip()
     if details:
+        if len(details) > 1600:
+            details = details[:1600].rstrip() + "…"
         return f"{name} couldn't respond: {details}"
     return f"{name} couldn't respond (exit status {status}). Check that its command-line tool is signed in."
 
