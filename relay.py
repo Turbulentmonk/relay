@@ -563,7 +563,8 @@ def main() -> int:
                 session_id = str(selected.get("id") or uuid.uuid4())
                 print(f"{DIM}Reopened conversation {requested_index} with {len(turns)} saved turns.{RESET}")
                 continue
-            print(f"{DIM}{len(sessions)} saved conversation(s), retained for up to {HISTORY_RETENTION_DAYS} days in {history_path()}.{RESET}")
+            history_location = sanitize_terminal_text(str(history_path())).replace("\n", "\\n").replace("\r", "\\r")
+            print(f"{DIM}{len(sessions)} saved conversation(s), retained for up to {HISTORY_RETENTION_DAYS} days in {history_location}.{RESET}")
             for index, session in enumerate(sessions[-10:], start=max(1, len(sessions) - 9)):
                 try:
                     updated_at = datetime.fromisoformat(session["updated_at"])
