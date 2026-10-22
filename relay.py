@@ -624,7 +624,8 @@ def main() -> int:
                 access = requested
                 print(f"Codex file access: {access}")
                 if access == "workspace-write":
-                    print(f"{ORANGE}Workspace-write enabled: Codex may change files under {os.getcwd()}.{RESET}")
+                    workspace = sanitize_terminal_text(os.getcwd()).replace("\n", "\\n").replace("\r", "\\r")
+                    print(f"{ORANGE}Workspace-write enabled: Codex may change files under {workspace}.{RESET}")
             else:
                 print(f"{RED}Choose read-only or workspace-write.{RESET}")
             continue
