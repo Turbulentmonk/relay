@@ -31,6 +31,7 @@ WHITE = "\033[38;5;252m"
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300
 MAX_PROVIDER_TIMEOUT_SECONDS = 3600
 HISTORY_RETENTION_DAYS = 30
+MAX_SAVED_SESSIONS = 500
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 STREAMED_RESPONSES: list[str] = []
@@ -75,6 +76,7 @@ def load_history() -> list[dict]:
 
 def write_history(sessions: list[dict]) -> None:
     path = history_path()
+    sessions = sessions[-MAX_SAVED_SESSIONS:]
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     try:
         path.parent.chmod(0o700)
