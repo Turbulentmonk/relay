@@ -550,6 +550,7 @@ def main() -> int:
             print("  /clear                        Clear the terminal screen")
             print("  /status                       Show providers, access, and workspace")
             print("  /quit                         Exit Relay")
+            print(f"Provider wait limit: {DEFAULT_PROVIDER_TIMEOUT_SECONDS}s by default; set RELAY_PROVIDER_TIMEOUT_SECONDS to 1–{MAX_PROVIDER_TIMEOUT_SECONDS}.")
             continue
         if user_text.lower() == "/quit":
             save_history(turns, session_id)
