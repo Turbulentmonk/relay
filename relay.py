@@ -279,6 +279,8 @@ def run_json_agent(name: str, command: list[str]) -> str:
     if chunks:
         print()
         response = "".join(chunks).strip()
+        if not response:
+            raise AgentError(f"{name} returned an empty reply. Try sending the request again.")
         STREAMED_RESPONSES.append(response)
         return response
     try:
