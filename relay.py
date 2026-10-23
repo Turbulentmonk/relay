@@ -65,7 +65,14 @@ def load_history() -> list[dict]:
             created = datetime.fromisoformat(session["updated_at"])
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
-            if created >= cutoff and isinstance(session.get("turns"), list):
+            turns = session.get("turns")
+            valid_turns = isinstance(turns, list) and all(
+                isinstance(turn, dict)
+                and isinstance(turn.get("speaker"), str)
+                and isinstance(turn.get("text"), str)
+                for turn in turns
+            )
+            if created >= cutoff and valid_turns:
                 retained.append(session)
         except (KeyError, TypeError, ValueError):
             continue
