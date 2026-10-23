@@ -292,10 +292,14 @@ def run_json_agent(name: str, command: list[str]) -> str:
         return response
     if not isinstance(payload, dict):
         raise AgentError(f"{name} returned a response Relay couldn't read. Try running its command-line tool directly.")
-    text = payload.get("result") or payload.get("message") or payload.get("text")
-    if not text:
+    text = next(
+        (payload.get(field) for field in ("result", "message", "text")
+         if isinstance(payload.get(field), str) and payload.get(field).strip()),
+        None,
+    )
+    if text is None:
         raise AgentError(f"{name} returned a response Relay couldn't read. Try running its command-line tool directly.")
-    return "\n".join(line.rstrip() for line in str(text).strip().splitlines())
+    return "\n".join(line.rstrip() for line in text.strip().splitlines())
 
 
 def agent_error_message(name: str, details: str, status: int) -> str:
