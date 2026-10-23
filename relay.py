@@ -558,6 +558,8 @@ def main() -> int:
             print("\033[2J\033[H", end="", flush=True)
             continue
         if user_text.lower() == "/status":
+            codex_ready = providers["codex"].discover()
+            claude_ready = providers["claude"].discover()
             print(f"Mode: {mode} · Lead: {leader} · Codex: {'ready' if codex_ready else 'not found'} · Claude Code: {'ready' if claude_ready else 'not found'} · Access: {access}")
             workspace = sanitize_terminal_text(os.getcwd()).replace("\n", "\\n").replace("\r", "\\r")
             print(f"Workspace: {workspace}")
