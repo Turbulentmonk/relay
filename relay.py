@@ -419,6 +419,10 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
         raise
     finally:
         selector.close()
+        if process is not None:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
 
 
 def conversation_context(turns: list[Turn]) -> str:
