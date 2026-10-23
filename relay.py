@@ -108,11 +108,12 @@ def write_history(sessions: list[dict]) -> None:
 def save_history(turns: list[Turn], session_id: str) -> None:
     sessions = load_history()
     if turns:
+        saved_at = datetime.now(timezone.utc).isoformat()
         snapshot = {
             "id": session_id,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": saved_at,
             "turns": [
-                {"speaker": turn.speaker, "text": turn.text, "created_at": turn.created_at}
+                {"speaker": turn.speaker, "text": turn.text, "created_at": turn.created_at or saved_at}
                 for turn in turns
             ],
         }
