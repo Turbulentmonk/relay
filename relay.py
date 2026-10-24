@@ -30,6 +30,7 @@ RED = "\033[38;5;203m"
 WHITE = "\033[38;5;252m"
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300
 MAX_PROVIDER_TIMEOUT_SECONDS = 3600
+MAX_PROVIDER_OUTPUT_BYTES = 16 * 1024 * 1024
 HISTORY_RETENTION_DAYS = 30
 MAX_SAVED_SESSIONS = 500
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
@@ -369,6 +370,7 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
         "stderr": codecs.getincrementaldecoder("utf-8")(errors="replace"),
     }
     pending_stdout = ""
+    output_bytes = 0
     try:
         process = subprocess.Popen(
             command,
@@ -386,6 +388,12 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
                 raise subprocess.TimeoutExpired(command, timeout)
             for key, _ in selector.select(min(remaining, 0.2)):
                 chunk = key.fileobj.read1(4096)
+                output_bytes += len(chunk)
+                if output_bytes > MAX_PROVIDER_OUTPUT_BYTES:
+                    raise AgentError(
+                        f"{name} produced more than {MAX_PROVIDER_OUTPUT_BYTES // (1024 * 1024)} MB of output. "
+                        "Relay stopped the command to protect memory."
+                    )
                 name_for_stream = key.data
                 text = decoders[name_for_stream].decode(chunk, final=not chunk)
                 if name_for_stream == "stdout":

@@ -48,7 +48,7 @@ Type a message and press Return. When both assistants are selected, Relay has on
 
 If an assistant reports that it has hit a usage or rate limit, Relay tells you which one could not respond and suggests trying again after the limit resets.
 
-The terminal app streams assistant replies and stops a child process on Ctrl+C. It waits up to five minutes by default; set `RELAY_PROVIDER_TIMEOUT_SECONDS` to a whole number from 1 to 3600 to change that limit.
+The terminal app streams assistant replies and stops a child process on Ctrl+C. It waits up to five minutes by default; set `RELAY_PROVIDER_TIMEOUT_SECONDS` to a whole number from 1 to 3600 to change that limit. Relay stops a provider command if its combined output exceeds 16 MB.
 
 Codex starts in read-only mode. To let it read and edit files in the folder where Relay was started, type `/access workspace-write`. Type `/access read-only` to switch back. Start Relay from the project folder you want Codex to work in. Claude uses plan mode. Relay does not turn on full computer access.
 
