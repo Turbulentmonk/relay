@@ -8,6 +8,7 @@ import codecs
 import os
 import re
 import selectors
+import signal
 import shutil
 import subprocess
 import sys
@@ -346,16 +347,21 @@ def provider_timeout_seconds() -> int:
 
 
 def stop_provider_process(process: subprocess.Popen[bytes] | None) -> None:
-    if process is None or process.poll() is not None:
+    if process is None:
         return
     try:
-        process.terminate()
+        os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         return
     try:
         process.wait(timeout=3)
     except subprocess.TimeoutExpired:
-        process.kill()
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    if process.poll() is None:
         process.wait()
 
 
@@ -377,6 +383,7 @@ def run_provider_command(name: str, command: list[str], on_stdout_line: Callable
             env=provider_environment(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            start_new_session=True,
         )
         assert process.stdout is not None and process.stderr is not None
         selector.register(process.stdout, selectors.EVENT_READ, "stdout")
